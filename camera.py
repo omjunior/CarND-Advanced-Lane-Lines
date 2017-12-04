@@ -2,17 +2,23 @@ import numpy as np
 import cv2
 import glob
 import pickle
+import os.path
 
 class Camera:
     """ Camera class to compute camera parameters and undistort images """
-    def __init__(self, pickle_file=None):
+    def __init__(self, pickle_file):
         """
         Constructor
 
         If a pickle file is given, just loads mtx and dist
         If no pickle file, then compute data
         """
-        if pickle_file == None:
+        if os.path.exists(pickle_file):
+            # load pickle
+            data = pickle.load(open(pickle_file, mode='rb'))
+            self.mtx_ = data["mtx"]
+            self.dist_ = data["dist"]
+        else:
             objp = np.zeros((9*6,3), np.float32)
             objp[:,:2] = np.mgrid[0:9, 0:6].T.reshape(-1,2) # 3d points
             objpoints = []
@@ -30,18 +36,12 @@ class Camera:
                 cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
             self.mtx_ = mtx
             self.dist_ = dist
-        else:
-            data = pickle.load(open(pickle_file, mode='rb'))
-            self.mtx_ = data["mtx"]
-            self.dist_ = data["dist"]
+            # save pickle
+            dist_pickle = {}
+            dist_pickle["mtx"] = self.mtx_
+            dist_pickle["dist"] = self.dist_
+            pickle.dump( dist_pickle, open( filename, "wb" ) )
 
     def undistort(self, img):
         """ Undistort an image """
         return cv2.undistort(img, self.mtx_, self.dist_, None, self.mtx_)
-
-    def save_pickle(self, filename):
-        """ Save parameters to a pickle file """
-        dist_pickle = {}
-        dist_pickle["mtx"] = self.mtx_
-        dist_pickle["dist"] = self.dist_
-        pickle.dump( dist_pickle, open( filename, "wb" ) )
