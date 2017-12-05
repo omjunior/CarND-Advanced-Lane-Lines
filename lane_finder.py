@@ -44,6 +44,24 @@ class LaneFinder:
                     self.stats_none += 1
         return self.success_last, self.left, self.right
 
+    def mark_lane(self, image):
+        ploty = np.linspace(0, 719, num=720)
+        left_fitx = self.left[0]*ploty**2 + self.left[1]*ploty + self.left[2]
+        right_fitx = self.right[0]*ploty**2 + self.right[1]*ploty + self.right[2]
+        # Create an image to draw the lines on
+        warp_zero = np.zeros_like(image).astype(np.uint8)
+        color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+        # Recast the x and y points into usable format for cv2.fillPoly()
+        pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+        pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+        pts = np.hstack((pts_left, pts_right))
+
+        # Draw the lane onto the warped blank image
+        cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+
+        return color_warp
+
     def paint(self, image):
         # Create an image to draw on and an image to show the selection window
         out_img = np.dstack((image, image, image))*255
@@ -109,10 +127,14 @@ class LaneFinder:
             win_xright_low = rightx_current - self.margin
             win_xright_high = rightx_current + self.margin
             # Identify the nonzero pixels in x and y within the window
-            good_left_inds = ((self.nonzeroy >= win_y_low) & (self.nonzeroy < win_y_high) &
-            (self.nonzerox >= win_xleft_low) &  (self.nonzerox < win_xleft_high)).nonzero()[0]
-            good_right_inds = ((self.nonzeroy >= win_y_low) & (self.nonzeroy < win_y_high) &
-            (self.nonzerox >= win_xright_low) &  (self.nonzerox < win_xright_high)).nonzero()[0]
+            good_left_inds = ((self.nonzeroy >= win_y_low) &
+                              (self.nonzeroy < win_y_high) &
+                              (self.nonzerox >= win_xleft_low) &
+                              (self.nonzerox < win_xleft_high)).nonzero()[0]
+            good_right_inds = ((self.nonzeroy >= win_y_low) &
+                               (self.nonzeroy < win_y_high) &
+                               (self.nonzerox >= win_xright_low) &
+                               (self.nonzerox < win_xright_high)).nonzero()[0]
             # Append these indices to the lists
             self.left_lane_inds.append(good_left_inds)
             self.right_lane_inds.append(good_right_inds)
@@ -149,13 +171,17 @@ class LaneFinder:
         nonzero = image.nonzero()
         self.nonzeroy = np.array(nonzero[0])
         self.nonzerox = np.array(nonzero[1])
-        self.left_lane_inds = ((self.nonzerox > (self.left[0]*(self.nonzeroy**2) + self.left[1]*self.nonzeroy +
-        self.left[2] - self.margin)) & (self.nonzerox < (self.left[0]*(self.nonzeroy**2) +
-        self.left[1]*self.nonzeroy + self.left[2] + self.margin)))
+        self.left_lane_inds = \
+            ((self.nonzerox > (self.left[0]*(self.nonzeroy**2) +
+              self.left[1]*self.nonzeroy + self.left[2] - self.margin)) &
+             (self.nonzerox < (self.left[0]*(self.nonzeroy**2) +
+              self.left[1]*self.nonzeroy + self.left[2] + self.margin)))
 
-        self.right_lane_inds = ((self.nonzerox > (self.right[0]*(self.nonzeroy**2) + self.right[1]*self.nonzeroy +
-        self.right[2] - self.margin)) & (self.nonzerox < (self.right[0]*(self.nonzeroy**2) +
-        self.right[1]*self.nonzeroy + self.right[2] + self.margin)))
+        self.right_lane_inds = \
+            ((self.nonzerox > (self.right[0]*(self.nonzeroy**2) +
+              self.right[1]*self.nonzeroy + self.right[2] - self.margin)) &
+            (self.nonzerox < (self.right[0]*(self.nonzeroy**2) +
+             self.right[1]*self.nonzeroy + self.right[2] + self.margin)))
 
         # Again, extract left and right line pixel positions
         leftx = self.nonzerox[self.left_lane_inds]

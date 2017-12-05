@@ -86,7 +86,7 @@ def hls_s_adapthresh(img, adap_size, adap_c):
 class ImagePipeline:
     def __init__(self):
         self.cam_ = Camera("camera_cal/calibration.p")
-        self.aoi_ = AOIBuilder(1280, 720, 1.0, 0.95, 0.185, 0.65)
+        self.aoi_ = AOIBuilder(1280, 720, 1.0, 0.95, 0.26, 0.68)
         self.persp_ = PerspectiveTransformer( \
             np.array(self.aoi_.get_src_points(), dtype=np.float32), \
             np.array(self.aoi_.get_dst_points(), dtype=np.float32))
@@ -100,9 +100,12 @@ class ImagePipeline:
         # return np.array(mask_white, dtype=np.bool_)
         return np.logical_or(mask_yellow, mask_white)
 
-    def process_frame(self, img):
+    def undistort(self, img):
         # undistort image
-        img = self.cam_.undistort(img)
+        und = self.cam_.undistort(img)
+        return und
+
+    def process_frame(self, img):
         # convert to HLS color space
         hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
         # find lanes
@@ -111,5 +114,10 @@ class ImagePipeline:
         # return np.dstack(( mask, mask, mask)) * 255
         # warp perspective
         warped = self.persp_.transform(np.array(mask, dtype=np.uint8))
-        # return np.dstack(( warped, warped, warped)) * 255
+        #return np.dstack(( warped, warped, warped)) * 255
         return warped
+
+    def warp_back(self, img, mask):
+        unwarped_mask = self.persp_.transform_back(mask)
+        comb = cv2.addWeighted(img, 1, unwarped_mask, 0.3, 0)
+        return comb
