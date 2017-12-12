@@ -1,6 +1,12 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
+
+
+class Lane:
+    def __init__(self, default_fit):
+        self.fit = None
+        self.success_last = False
+        self.default = default_fit
 
 
 class LaneFinder:
@@ -9,9 +15,13 @@ class LaneFinder:
         self.right = None
         self.memory = memory
         self.success_last = False
-        self.default_left = [0,0,200]
-        self.default_right = [0,0,1000]
+        self.default_left = [0, 0, 200]
+        self.default_right = [0, 0, 1000]
         self.margin = 100
+        self.nonzerox = None
+        self.nonzeroy = None
+        self.right_lane_inds = None
+        self.left_lane_inds = None
         # to consider a failure
         self.limit = 1000
         # statistics
@@ -26,7 +36,7 @@ class LaneFinder:
         print("Frames failed:", self.stats_none)
 
     def find_lanes(self, image):
-        if (not self.success_last):
+        if not self.success_last:
             self.success_last = self.find_lanes_full(image)
             if self.success_last:
                 self.stats_full += 1
@@ -45,65 +55,65 @@ class LaneFinder:
         return self.success_last, self.left, self.right
 
     def mark_lane(self, image):
-        ploty = np.linspace(0, 719, num=720)
-        left_fitx = self.left[0]*ploty**2 + self.left[1]*ploty + self.left[2]
-        right_fitx = self.right[0]*ploty**2 + self.right[1]*ploty + self.right[2]
+        plot_y = np.linspace(0, 719, num=720)
+        left_fitx = self.left[0] * plot_y ** 2 + self.left[1] * plot_y + self.left[2]
+        right_fitx = self.right[0] * plot_y ** 2 + self.right[1] * plot_y + self.right[2]
         # Create an image to draw the lines on
         warp_zero = np.zeros_like(image).astype(np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
         # Recast the x and y points into usable format for cv2.fillPoly()
-        pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-        pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+        pts_left = np.array([np.transpose(np.vstack([left_fitx, plot_y]))])
+        pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, plot_y])))])
         pts = np.hstack((pts_left, pts_right))
 
         # Draw the lane onto the warped blank image
-        cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+        cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
 
         return color_warp
 
     def paint(self, image):
         # Create an image to draw on and an image to show the selection window
-        out_img = np.dstack((image, image, image))*255
+        out_img = np.dstack((image, image, image)) * 255
         window_img = np.zeros_like(out_img)
         # Color in left and right line pixels
         out_img[self.nonzeroy[self.left_lane_inds], self.nonzerox[self.left_lane_inds]] = [255, 0, 0]
         out_img[self.nonzeroy[self.right_lane_inds], self.nonzerox[self.right_lane_inds]] = [0, 0, 255]
 
         # Generate x and y values for plotting
-        ploty = np.linspace(0, image.shape[0]-1, image.shape[0] )
-        left_fitx = self.left[0]*ploty**2 + self.left[1]*ploty + self.left[2]
-        right_fitx = self.right[0]*ploty**2 + self.right[1]*ploty + self.right[2]
+        ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
+        left_fitx = self.left[0] * ploty ** 2 + self.left[1] * ploty + self.left[2]
+        right_fitx = self.right[0] * ploty ** 2 + self.right[1] * ploty + self.right[2]
 
         # Generate a polygon to illustrate the search window area
         # And recast the x and y points into usable format for cv2.fillPoly()
-        left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-self.margin, ploty]))])
-        left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+self.margin,
-                                      ploty])))])
+        left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - self.margin, ploty]))])
+        left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + self.margin,
+                                                                        ploty])))])
         left_line_pts = np.hstack((left_line_window1, left_line_window2))
-        right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-self.margin, ploty]))])
-        right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+self.margin,
-                                      ploty])))])
+        right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - self.margin, ploty]))])
+        right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + self.margin,
+                                                                         ploty])))])
         right_line_pts = np.hstack((right_line_window1, right_line_window2))
 
         # Draw the lane onto the warped blank image
-        cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-        cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
+        cv2.fillPoly(window_img, np.int_([left_line_pts]), (0, 255, 0))
+        cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
         return cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
 
     def find_lanes_full(self, image):
         # Take a histogram of the bottom half of the image
-        histogram = np.sum(image[int(image.shape[0]/2):,:], axis=0)
+        histogram = np.sum(image[int(image.shape[0] / 2):, :], axis=0)
         # Find the peak of the left and right halves of the histogram
         # These will be the starting point for the left and right lines
-        midpoint = np.int(histogram.shape[0]/2)
+        midpoint = np.int(histogram.shape[0] / 2)
         leftx_base = np.argmax(histogram[:midpoint])
         rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
         # Choose the number of sliding windows
         nwindows = 9
         # Set height of windows
-        window_height = np.int(image.shape[0]/nwindows)
+        window_height = np.int(image.shape[0] / nwindows)
         # Identify the x and y positions of all nonzero pixels in the image
         nonzero = image.nonzero()
         self.nonzeroy = np.array(nonzero[0])
@@ -120,8 +130,8 @@ class LaneFinder:
         # Step through the windows one by one
         for window in range(nwindows):
             # Identify window boundaries in x and y (and right and left)
-            win_y_low = image.shape[0] - (window+1)*window_height
-            win_y_high = image.shape[0] - window*window_height
+            win_y_low = image.shape[0] - (window + 1) * window_height
+            win_y_high = image.shape[0] - window * window_height
             win_xleft_low = leftx_current - self.margin
             win_xleft_high = leftx_current + self.margin
             win_xright_low = rightx_current - self.margin
@@ -154,8 +164,8 @@ class LaneFinder:
         rightx = self.nonzerox[self.right_lane_inds]
         righty = self.nonzeroy[self.right_lane_inds]
 
-        #print(len(leftx), len(rightx))
-        if (len(rightx) < self.limit or len(leftx) < self.limit):
+        # print(len(leftx), len(rightx))
+        if len(rightx) < self.limit or len(leftx) < self.limit:
             self.left = self.default_left
             self.right = self.default_right
             return False
@@ -166,22 +176,21 @@ class LaneFinder:
 
         return True
 
-
     def find_lanes_with_eq(self, image):
         nonzero = image.nonzero()
         self.nonzeroy = np.array(nonzero[0])
         self.nonzerox = np.array(nonzero[1])
         self.left_lane_inds = \
-            ((self.nonzerox > (self.left[0]*(self.nonzeroy**2) +
-              self.left[1]*self.nonzeroy + self.left[2] - self.margin)) &
-             (self.nonzerox < (self.left[0]*(self.nonzeroy**2) +
-              self.left[1]*self.nonzeroy + self.left[2] + self.margin)))
+            ((self.nonzerox > (self.left[0] * (self.nonzeroy ** 2) +
+                               self.left[1] * self.nonzeroy + self.left[2] - self.margin)) &
+             (self.nonzerox < (self.left[0] * (self.nonzeroy ** 2) +
+                               self.left[1] * self.nonzeroy + self.left[2] + self.margin)))
 
         self.right_lane_inds = \
-            ((self.nonzerox > (self.right[0]*(self.nonzeroy**2) +
-              self.right[1]*self.nonzeroy + self.right[2] - self.margin)) &
-            (self.nonzerox < (self.right[0]*(self.nonzeroy**2) +
-             self.right[1]*self.nonzeroy + self.right[2] + self.margin)))
+            ((self.nonzerox > (self.right[0] * (self.nonzeroy ** 2) +
+                               self.right[1] * self.nonzeroy + self.right[2] - self.margin)) &
+             (self.nonzerox < (self.right[0] * (self.nonzeroy ** 2) +
+                               self.right[1] * self.nonzeroy + self.right[2] + self.margin)))
 
         # Again, extract left and right line pixel positions
         leftx = self.nonzerox[self.left_lane_inds]
@@ -189,8 +198,8 @@ class LaneFinder:
         rightx = self.nonzerox[self.right_lane_inds]
         righty = self.nonzeroy[self.right_lane_inds]
 
-        #print(len(leftx), len(rightx))
-        if (len(rightx) < self.limit or len(leftx) < self.limit):
+        # print(len(leftx), len(rightx))
+        if len(rightx) < self.limit or len(leftx) < self.limit:
             self.left = self.default_left
             self.right = self.default_right
             return False
