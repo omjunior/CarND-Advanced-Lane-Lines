@@ -18,8 +18,8 @@ class Camera:
         if os.path.exists(pickle_file):
             # load pickle
             data = pickle.load(open(pickle_file, mode='rb'))
-            self.mtx_ = data["mtx"]
-            self.dist_ = data["dist"]
+            self.mtx = data["mtx"]
+            self.dist = data["dist"]
         else:
             objp = np.zeros((9 * 6, 3), np.float32)
             objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)  # 3d points
@@ -35,12 +35,12 @@ class Camera:
                     objpoints.append(objp)
                     imgpoints.append(corners)
             _, mtx, dist, _, _ = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
-            self.mtx_ = mtx
-            self.dist_ = dist
+            self.mtx = mtx
+            self.dist = dist
             # save pickle
-            dist_pickle = {"mtx": self.mtx_, "dist": self.dist_}
+            dist_pickle = {"mtx": self.mtx, "dist": self.dist}
             pickle.dump(dist_pickle, open(pickle_file, "wb"))
 
     def undistort(self, img):
         """ Undistort an image """
-        return cv2.undistort(img, self.mtx_, self.dist_, None, self.mtx_)
+        return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)

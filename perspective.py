@@ -6,16 +6,16 @@ class PerspectiveTransformer:
 
     def __init__(self, src, dst):
         """ Constructor """
-        self.M_ = cv2.getPerspectiveTransform(src, dst)
-        self.M_rev_ = cv2.getPerspectiveTransform(dst, src)
+        self.M = cv2.getPerspectiveTransform(src, dst)
+        self.M_rev = cv2.getPerspectiveTransform(dst, src)
 
-    def transform(self, img):
+    def warp(self, img):
         """ Transform from src coordinates to dst """
-        return cv2.warpPerspective(img, self.M_, img.shape[1::-1])
+        return cv2.warpPerspective(img, self.M, img.shape[1::-1])
 
-    def transform_back(self, img):
+    def unwarp(self, img):
         """ Transform from dst coordinates to src """
-        return cv2.warpPerspective(img, self.M_rev_, img.shape[1::-1])
+        return cv2.warpPerspective(img, self.M_rev, img.shape[1::-1])
 
 
 class AOIBuilder:

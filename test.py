@@ -4,7 +4,7 @@ from lane_finder import *
 from pipeline import *
 
 pipeline = ImagePipeline()
-finder = LaneFinder(1280, 0)
+finder = LaneFinder(0)
 
 # images = glob.glob('./test_images/*.jpg')
 # for fname in images:
@@ -14,7 +14,8 @@ finder = LaneFinder(1280, 0)
 #     proc = pipeline.process_frame(und)
 #     finder.find_lanes(proc)
 #     proc = finder.mark_lane(proc)
-#     proc = pipeline.warp_back(cv2.cvtColor(und, cv2.COLOR_RGB2BGR), proc)
+#     proc = pipeline.unwarp_and_combine(cv2.cvtColor(und, cv2.COLOR_RGB2BGR), proc)
+#     proc = finder.annotate_frame(proc)
 #     filename = fname.split('/')[-1]
 #     cv2.imwrite("./output_images/" + filename, proc)
 
@@ -24,7 +25,8 @@ def proc_frame(img):
     proc = pipeline.process_frame(und)
     finder.find_lanes(proc)
     proc = finder.mark_lane(proc)
-    proc = pipeline.warp_back(und, proc)
+    proc = pipeline.unwarp_and_combine(und, proc)
+    proc = finder.annotate_frame(proc)
     return proc
 
 

@@ -3,27 +3,27 @@ import cv2
 
 
 class Lane:
+    plot_y = np.linspace(0, 719, num=720)
+
     def __init__(self, default_fit):
+        self.x = None
+        self.y = None
         self.fit = None
-        self.success_last = False
         self.default = default_fit
+        self.lane_inds = None
 
 
 class LaneFinder:
-    def __init__(self, width, memory):
-        self.left = None
-        self.right = None
+    def __init__(self, memory):
+        self.left = Lane([0, 0, 200])
+        self.right = Lane([0, 0, 1000])
         self.memory = memory
-        self.success_last = False
-        self.default_left = [0, 0, 200]
-        self.default_right = [0, 0, 1000]
         self.margin = 100
         self.nonzerox = None
         self.nonzeroy = None
-        self.right_lane_inds = None
-        self.left_lane_inds = None
         # to consider a failure
         self.limit = 1000
+        self.success_last = False
         # statistics
         self.stats_full = 0
         self.stats_eq = 0
@@ -52,19 +52,18 @@ class LaneFinder:
                     self.stats_full += 1
                 else:
                     self.stats_none += 1
-        return self.success_last, self.left, self.right
+        return self.success_last, self.left.fit, self.right.fit
 
     def mark_lane(self, image):
-        plot_y = np.linspace(0, 719, num=720)
-        left_fitx = self.left[0] * plot_y ** 2 + self.left[1] * plot_y + self.left[2]
-        right_fitx = self.right[0] * plot_y ** 2 + self.right[1] * plot_y + self.right[2]
+        left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
+        right_fitx = self.right.fit[0] * Lane.plot_y ** 2 + self.right.fit[1] * Lane.plot_y + self.right.fit[2]
         # Create an image to draw the lines on
         warp_zero = np.zeros_like(image).astype(np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
         # Recast the x and y points into usable format for cv2.fillPoly()
-        pts_left = np.array([np.transpose(np.vstack([left_fitx, plot_y]))])
-        pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, plot_y])))])
+        pts_left = np.array([np.transpose(np.vstack([left_fitx, Lane.plot_y]))])
+        pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, Lane.plot_y])))])
         pts = np.hstack((pts_left, pts_right))
 
         # Draw the lane onto the warped blank image
@@ -72,28 +71,52 @@ class LaneFinder:
 
         return color_warp
 
+    def annotate_frame(self, image):
+        ym_per_pix = 30 / 720  # meters per pixel in y dimension
+        xm_per_pix = 3.7 / 700  # meters per pixel in x dimension
+        y_eval = 719
+
+        left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
+        right_fitx = self.right.fit[0] * Lane.plot_y ** 2 + self.right.fit[1] * Lane.plot_y + self.right.fit[2]
+        middlex = (left_fitx[y_eval] + right_fitx[y_eval]) / 2 * xm_per_pix
+        carx = 1080 / 2 * xm_per_pix
+
+        # Fit new polynomials to x,y in world space
+        left_fit_cr = np.polyfit(Lane.plot_y * ym_per_pix, left_fitx * xm_per_pix, 2)
+        right_fit_cr = np.polyfit(Lane.plot_y * ym_per_pix, right_fitx * xm_per_pix, 2)
+        # Calculate the new radii of curvature
+        left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / \
+                        np.absolute(2 * left_fit_cr[0])
+        right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / \
+                         np.absolute(2 * right_fit_cr[0])
+        # Now our radius of curvature is in meters
+        im = cv2.putText(image, "Left curvature: " + str(left_curverad) + "m", (10, 50),
+                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+        im = cv2.putText(im, "Right curvature: " + str(right_curverad) + "m", (10, 100),
+                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+        im = cv2.putText(im, "Car position: " + str(carx - middlex) + "m", (10, 150),
+                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+        return im
+
     def paint(self, image):
         # Create an image to draw on and an image to show the selection window
         out_img = np.dstack((image, image, image)) * 255
         window_img = np.zeros_like(out_img)
         # Color in left and right line pixels
-        out_img[self.nonzeroy[self.left_lane_inds], self.nonzerox[self.left_lane_inds]] = [255, 0, 0]
-        out_img[self.nonzeroy[self.right_lane_inds], self.nonzerox[self.right_lane_inds]] = [0, 0, 255]
+        out_img[self.nonzeroy[self.left.lane_inds], self.nonzerox[self.left.lane_inds]] = [255, 0, 0]
+        out_img[self.nonzeroy[self.right.lane_inds], self.nonzerox[self.right.lane_inds]] = [0, 0, 255]
 
         # Generate x and y values for plotting
-        ploty = np.linspace(0, image.shape[0] - 1, image.shape[0])
-        left_fitx = self.left[0] * ploty ** 2 + self.left[1] * ploty + self.left[2]
-        right_fitx = self.right[0] * ploty ** 2 + self.right[1] * ploty + self.right[2]
+        left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
+        right_fitx = self.right.fit[0] * Lane.plot_y ** 2 + self.right.fit[1] * Lane.plot_y + self.right.fit[2]
 
         # Generate a polygon to illustrate the search window area
         # And recast the x and y points into usable format for cv2.fillPoly()
-        left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - self.margin, ploty]))])
-        left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + self.margin,
-                                                                        ploty])))])
+        left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - self.margin, Lane.plot_y]))])
+        left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + self.margin, Lane.plot_y])))])
         left_line_pts = np.hstack((left_line_window1, left_line_window2))
-        right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - self.margin, ploty]))])
-        right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + self.margin,
-                                                                         ploty])))])
+        right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - self.margin, Lane.plot_y]))])
+        right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + self.margin, Lane.plot_y])))])
         right_line_pts = np.hstack((right_line_window1, right_line_window2))
 
         # Draw the lane onto the warped blank image
@@ -124,8 +147,8 @@ class LaneFinder:
         # Set minimum number of pixels found to recenter window
         minpix = 50
         # Create empty lists to receive left and right lane pixel indices
-        self.left_lane_inds = []
-        self.right_lane_inds = []
+        self.left.lane_inds = []
+        self.right.lane_inds = []
 
         # Step through the windows one by one
         for window in range(nwindows):
@@ -146,8 +169,8 @@ class LaneFinder:
                                (self.nonzerox >= win_xright_low) &
                                (self.nonzerox < win_xright_high)).nonzero()[0]
             # Append these indices to the lists
-            self.left_lane_inds.append(good_left_inds)
-            self.right_lane_inds.append(good_right_inds)
+            self.left.lane_inds.append(good_left_inds)
+            self.right.lane_inds.append(good_right_inds)
             # If you found > minpix pixels, recenter next window on their mean position
             if len(good_left_inds) > minpix:
                 leftx_current = np.int(np.mean(self.nonzerox[good_left_inds]))
@@ -155,24 +178,24 @@ class LaneFinder:
                 rightx_current = np.int(np.mean(self.nonzerox[good_right_inds]))
 
         # Concatenate the arrays of indices
-        self.left_lane_inds = np.concatenate(self.left_lane_inds)
-        self.right_lane_inds = np.concatenate(self.right_lane_inds)
+        self.left.lane_inds = np.concatenate(self.left.lane_inds)
+        self.right.lane_inds = np.concatenate(self.right.lane_inds)
 
         # Extract left and right line pixel positions
-        leftx = self.nonzerox[self.left_lane_inds]
-        lefty = self.nonzeroy[self.left_lane_inds]
-        rightx = self.nonzerox[self.right_lane_inds]
-        righty = self.nonzeroy[self.right_lane_inds]
+        self.left.x = self.nonzerox[self.left.lane_inds]
+        self.left.y = self.nonzeroy[self.left.lane_inds]
+        self.right.x = self.nonzerox[self.right.lane_inds]
+        self.right.y = self.nonzeroy[self.right.lane_inds]
 
-        # print(len(leftx), len(rightx))
-        if len(rightx) < self.limit or len(leftx) < self.limit:
-            self.left = self.default_left
-            self.right = self.default_right
+        # print(len(self.left.x), len(self.right.x))
+        if len(self.right.x) < self.limit or len(self.left.x) < self.limit:
+            self.left = self.left.default
+            self.right = self.right.default
             return False
 
         # Fit a second order polynomial to each
-        self.left = np.polyfit(lefty, leftx, 2)
-        self.right = np.polyfit(righty, rightx, 2)
+        self.left.fit = np.polyfit(self.left.y, self.left.x, 2)
+        self.right.fit = np.polyfit(self.right.y, self.right.x, 2)
 
         return True
 
@@ -180,32 +203,32 @@ class LaneFinder:
         nonzero = image.nonzero()
         self.nonzeroy = np.array(nonzero[0])
         self.nonzerox = np.array(nonzero[1])
-        self.left_lane_inds = \
-            ((self.nonzerox > (self.left[0] * (self.nonzeroy ** 2) +
-                               self.left[1] * self.nonzeroy + self.left[2] - self.margin)) &
-             (self.nonzerox < (self.left[0] * (self.nonzeroy ** 2) +
-                               self.left[1] * self.nonzeroy + self.left[2] + self.margin)))
+        self.left.lane_inds = \
+            ((self.nonzerox > (self.left.fit[0] * (self.nonzeroy ** 2) +
+                               self.left.fit[1] * self.nonzeroy + self.left.fit[2] - self.margin)) &
+             (self.nonzerox < (self.left.fit[0] * (self.nonzeroy ** 2) +
+                               self.left.fit[1] * self.nonzeroy + self.left.fit[2] + self.margin)))
 
-        self.right_lane_inds = \
-            ((self.nonzerox > (self.right[0] * (self.nonzeroy ** 2) +
-                               self.right[1] * self.nonzeroy + self.right[2] - self.margin)) &
-             (self.nonzerox < (self.right[0] * (self.nonzeroy ** 2) +
-                               self.right[1] * self.nonzeroy + self.right[2] + self.margin)))
+        self.right.lane_inds = \
+            ((self.nonzerox > (self.right.fit[0] * (self.nonzeroy ** 2) +
+                               self.right.fit[1] * self.nonzeroy + self.right.fit[2] - self.margin)) &
+             (self.nonzerox < (self.right.fit[0] * (self.nonzeroy ** 2) +
+                               self.right.fit[1] * self.nonzeroy + self.right.fit[2] + self.margin)))
 
         # Again, extract left and right line pixel positions
-        leftx = self.nonzerox[self.left_lane_inds]
-        lefty = self.nonzeroy[self.left_lane_inds]
-        rightx = self.nonzerox[self.right_lane_inds]
-        righty = self.nonzeroy[self.right_lane_inds]
+        self.left.x = self.nonzerox[self.left.lane_inds]
+        self.left.y = self.nonzeroy[self.left.lane_inds]
+        self.right.x = self.nonzerox[self.right.lane_inds]
+        self.right.y = self.nonzeroy[self.right.lane_inds]
 
-        # print(len(leftx), len(rightx))
-        if len(rightx) < self.limit or len(leftx) < self.limit:
-            self.left = self.default_left
-            self.right = self.default_right
+        # print(len(self.left.x), len(self.right.x))
+        if len(self.right.x) < self.limit or len(self.left.x) < self.limit:
+            self.left.fit = self.left.default
+            self.right.fit = self.right.default
             return False
 
         # Fit a second order polynomial to each
-        self.left = np.polyfit(lefty, leftx, 2)
-        self.right = np.polyfit(righty, rightx, 2)
+        self.left.fit = np.polyfit(self.left.y, self.left.x, 2)
+        self.right.fit = np.polyfit(self.right.y, self.right.x, 2)
 
         return True
