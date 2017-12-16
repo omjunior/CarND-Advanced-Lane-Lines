@@ -20,6 +20,15 @@ class LaneFinder:
         self.margin = 100
         self.nonzerox = None
         self.nonzeroy = None
+        self.success_last = False
+
+    def find_lanes(self, image):
+        if not self.success_last:
+            self.success_last = self.find_lanes_full(image)
+        else:
+            self.success_last = self.find_lanes_with_eq(image)
+            if not self.success_last:
+                self.success_last = self.find_lanes_full(image)
 
     def mark_lane(self, image):
         left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
@@ -57,9 +66,9 @@ class LaneFinder:
         right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / \
                          np.absolute(2 * right_fit_cr[0])
         # Now our radius of curvature is in meters
-        im = cv2.putText(image, "Left curvature: " + str((left_curverad + right_curverad)/2) + "m", (10, 50),
+        im = cv2.putText(image, "Left curvature: " + "{0:.2f}".format((left_curverad + right_curverad)/2) + "m", (10, 50),
                          cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-        im = cv2.putText(im, "Car position: " + str(carx - middlex) + "m", (10, 100),
+        im = cv2.putText(im, "Car position: " + "{0:.2f}".format(carx - middlex) + "m", (10, 100),
                          cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
         return im
 
@@ -89,7 +98,7 @@ class LaneFinder:
         cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
         return cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
 
-    def find_lanes(self, image):
+    def find_lanes_full(self, image):
         # Take a histogram of the bottom half of the image
         histogram = np.sum(image[int(image.shape[0] / 2):, :], axis=0)
         # Find the peak of the left and right halves of the histogram
@@ -147,6 +156,45 @@ class LaneFinder:
         self.right.lane_inds = np.concatenate(self.right.lane_inds)
 
         # Extract left and right line pixel positions
+        self.left.x.append(self.nonzerox[self.left.lane_inds])
+        self.left.y.append(self.nonzeroy[self.left.lane_inds])
+        self.right.x.append(self.nonzerox[self.right.lane_inds])
+        self.right.y.append(self.nonzeroy[self.right.lane_inds])
+
+        # hold the last 'memory' items
+        if len(self.left.x) > self.memory:
+            self.left.x.pop(0)
+            self.left.y.pop(0)
+            self.right.x.pop(0)
+            self.right.y.pop(0)
+
+        # Fit a second order polynomial to each
+        flat_ly = np.concatenate(self.left.y).ravel()
+        flat_lx = np.concatenate(self.left.x).ravel()
+        flat_ry = np.concatenate(self.right.y).ravel()
+        flat_rx = np.concatenate(self.right.x).ravel()
+        self.left.fit = np.polyfit(flat_ly, flat_lx, 2)
+        self.right.fit = np.polyfit(flat_ry, flat_rx, 2)
+
+        return True
+
+    def find_lanes_with_eq(self, image):
+        nonzero = image.nonzero()
+        self.nonzeroy = np.array(nonzero[0])
+        self.nonzerox = np.array(nonzero[1])
+        self.left.lane_inds = \
+            ((self.nonzerox > (self.left.fit[0] * (self.nonzeroy ** 2) +
+                               self.left.fit[1] * self.nonzeroy + self.left.fit[2] - self.margin)) &
+             (self.nonzerox < (self.left.fit[0] * (self.nonzeroy ** 2) +
+                               self.left.fit[1] * self.nonzeroy + self.left.fit[2] + self.margin)))
+
+        self.right.lane_inds = \
+            ((self.nonzerox > (self.right.fit[0] * (self.nonzeroy ** 2) +
+                               self.right.fit[1] * self.nonzeroy + self.right.fit[2] - self.margin)) &
+             (self.nonzerox < (self.right.fit[0] * (self.nonzeroy ** 2) +
+                               self.right.fit[1] * self.nonzeroy + self.right.fit[2] + self.margin)))
+
+        # Again, extract left and right line pixel positions
         self.left.x.append(self.nonzerox[self.left.lane_inds])
         self.left.y.append(self.nonzeroy[self.left.lane_inds])
         self.right.x.append(self.nonzerox[self.right.lane_inds])
