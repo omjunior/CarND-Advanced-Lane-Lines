@@ -4,7 +4,7 @@ from lane_finder import *
 from pipeline import *
 
 pipeline = ImagePipeline()
-finder = LaneFinder(0)
+finder = LaneFinder(5)
 
 # images = glob.glob('./test_images/*.jpg')
 # for fname in images:
