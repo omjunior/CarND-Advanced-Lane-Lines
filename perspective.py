@@ -11,11 +11,11 @@ class PerspectiveTransformer:
 
     def warp(self, img):
         """ Transform from src coordinates to dst """
-        return cv2.warpPerspective(img, self.M, img.shape[1::-1])
+        return cv2.warpPerspective(img, self.M, img.shape[1::-1], flags=cv2.INTER_LINEAR)
 
     def unwarp(self, img):
         """ Transform from dst coordinates to src """
-        return cv2.warpPerspective(img, self.M_rev, img.shape[1::-1])
+        return cv2.warpPerspective(img, self.M_rev, img.shape[1::-1], flags=cv2.INTER_LINEAR)
 
 
 class AOIBuilder:

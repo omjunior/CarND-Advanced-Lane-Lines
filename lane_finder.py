@@ -21,14 +21,35 @@ class LaneFinder:
         self.nonzerox = None
         self.nonzeroy = None
         self.success_last = False
+        self.limit = 500  # min for failure
+        # statistics
+        self.stats_full = 0
+        self.stats_eq = 0
+        self.stats_none = 0
+
+    def __del__(self):
+        print("Frames fully analyzed:", self.stats_full)
+        print("Frames using equation:", self.stats_eq)
+        print("Frames failed:", self.stats_none)
 
     def find_lanes(self, image):
         if not self.success_last:
             self.success_last = self.find_lanes_full(image)
+            if self.success_last:
+                self.stats_full += 1
+            else:
+                self.stats_none += 1
         else:
             self.success_last = self.find_lanes_with_eq(image)
-            if not self.success_last:
+            if self.success_last:
+                self.stats_eq += 1
+            else:
                 self.success_last = self.find_lanes_full(image)
+                if self.success_last:
+                    self.stats_full += 1
+                else:
+                    self.stats_none += 1
+        return self.success_last
 
     def mark_lane(self, image):
         left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
@@ -44,18 +65,24 @@ class LaneFinder:
 
         # Draw the lane onto the warped blank image
         cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
+        color_warp[self.left.y[-1], self.left.x[-1], 0] = 255
+        color_warp[self.right.y[-1], self.right.x[-1], 2] = 255
 
         return color_warp
 
     def annotate_frame(self, image):
-        ym_per_pix = 30 / 720  # meters per pixel in y dimension
-        xm_per_pix = 3.7 / 700  # meters per pixel in x dimension
         y_eval = 719
 
         left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
         right_fitx = self.right.fit[0] * Lane.plot_y ** 2 + self.right.fit[1] * Lane.plot_y + self.right.fit[2]
+        lanes_dist = right_fitx[y_eval] - left_fitx[y_eval]
+
+        ym_per_pix = 50 / 720  # meters per pixel in y dimension
+        xm_per_pix = 3.7 / lanes_dist  # meters per pixel in x dimension
+
         middlex = (left_fitx[y_eval] + right_fitx[y_eval]) / 2 * xm_per_pix
         carx = 1080 / 2 * xm_per_pix
+
 
         # Fit new polynomials to x,y in world space
         left_fit_cr = np.polyfit(Lane.plot_y * ym_per_pix, left_fitx * xm_per_pix, 2)
@@ -161,6 +188,14 @@ class LaneFinder:
         self.right.x.append(self.nonzerox[self.right.lane_inds])
         self.right.y.append(self.nonzeroy[self.right.lane_inds])
 
+        # abort this frame and keep last fit
+        if self.right.x[-1].size < self.limit or self.left.x[-1].size < self.limit:
+            self.left.x.pop(-1)
+            self.left.y.pop(-1)
+            self.right.x.pop(-1)
+            self.right.y.pop(-1)
+            return False
+
         # hold the last 'memory' items
         if len(self.left.x) > self.memory:
             self.left.x.pop(0)
@@ -199,6 +234,14 @@ class LaneFinder:
         self.left.y.append(self.nonzeroy[self.left.lane_inds])
         self.right.x.append(self.nonzerox[self.right.lane_inds])
         self.right.y.append(self.nonzeroy[self.right.lane_inds])
+
+        # abort this frame and keep last fit
+        if self.right.x[-1].size < self.limit or self.left.x[-1].size < self.limit:
+            self.left.x.pop(-1)
+            self.left.y.pop(-1)
+            self.right.x.pop(-1)
+            self.right.y.pop(-1)
+            return False
 
         # hold the last 'memory' items
         if len(self.left.x) > self.memory:

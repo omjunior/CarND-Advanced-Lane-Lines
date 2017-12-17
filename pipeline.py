@@ -93,7 +93,7 @@ def hls_s_adapthresh(img, adap_size, adap_c):
 class ImagePipeline:
     def __init__(self):
         self.cam = Camera("camera_cal/calibration.p")
-        self.aoi = AOIBuilder(1280, 720, 1.0, 0.96, 0.185, 0.65)
+        self.aoi = AOIBuilder(1280, 720, 1.2, 0.96, 0.12, 0.62)
         self.persp = PerspectiveTransformer(np.array(self.aoi.get_src_points(), dtype=np.float32),
                                             np.array(self.aoi.get_dst_points(), dtype=np.float32))
 
