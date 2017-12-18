@@ -70,8 +70,8 @@ Follow examples.
 
 #### Create a binary image identifying the lanes
 
-I found that the most efficient method for identifying pixels belonging to lanes was not applying convolution, but
-simple thresholds.
+I found that the most efficient method for identifying pixels belonging to lanes was not applying convolutional filters,
+but to apply simple threshold values.
 
 I converted the image to the HLS space and combined a yellow thresholding with a white one.
 The yellow threshold was implemented by searching for a Hue channel value between 0 and 50, and both Luminance and
@@ -152,7 +152,7 @@ There are two methods for finding pixels, one for starting from scratch, called 
 for when the equation for the last frame is known and reliable, called ```find_lanes_with_eq()```.
 
 The first method, ```find_lanes_full()```, starts by looking at the bottom half of the binary thresholded image, 
-computing the histogram of pixels by column. The larger peak of each half of the image is computed.
+computing the histogram of 'on' pixels by column. The larger peak of each half of the image is computed.
 
 Then search blocks are defined. The height of each block is ```1/nwindows``` of the frame height (in this case
 ```nwindows``` used was 9). The first blocks for both left and right are centered in the respective peaks found earlier.
@@ -178,10 +178,10 @@ If the last frame failed, the current frame will be processed with ```find_lanes
 successful, the current frame is processed with ```find_lanes_with_eq()```, and if this method fails the same frame
 falls to ```find_lanes_full()```.
 
-The polynomials are computed by using the OpenCV function ```polyfit```.
+The polynomials are computed by using the OpenCV function ```polyfit``` over the selected points.
 
-In the following examples, the detected points belonging to lines are colored blue and red, and the space between the
-computed polynomials (the lane) is colored green:
+In the following examples, the detected points belonging to the left and right lines are colored blue and red
+respectively, and the space between the computed polynomials (the lane) is colored green:
 
 | |  | 
 |:---:|:---:|
@@ -210,19 +210,21 @@ The curvature of a line at a point **y** can be computed using the following for
 ```R = ((1 + (2*y+B)^2)^(3/2))/abs(2*A)```
 
 But since all these points are being measured in pixels, a conversion must be performed to express these values in
-real-world units, such as meters.
+real-world units, such as meters, prior to compute the radius of curvature.
 
-For that, the equation is first computed for each **y** in the range of the image (its height).
+For that, the equation is first computed for each **y** in the range of the image (its height, 720), defining one
+```(x, y)``` point with **y** varying from 0 to 719.
 For the **x** dimension, the distance between lines is computed in pixels, and the following constant is multiplied
-to each **x**: ```3.7 meters / lanes_dist```, which is assumed to be the width of the lane.
+to each **x**: ```3.7 meters / lanes_dist pixels```, assuming the width of the lane to be 3.7 meters.
 For the **y** dimension, it is assumed that the area of interest selected spans approx. 50 meters, hence multiplying
-by a factor of ```50/720```.
+by a factor of ```50 meters / 720 pixels```.
 
-After the transformation, the above equation is applied to the bottom-most pixel (the point closest to the car).
+After the transformation, a new regression is performed for each of the lines, and the above equation is applied to the
+bottom-most pixel (the point closest to the car). The average of the curvatures of the right and left lanes is taken.
 
 For the car's position, it is assumed that the camera is mounted on the center of the car, so the center of the image
-is a good representative to the position of the car. So it is computed as the difference between the center of the
-image to the middle point of the lanes (right_lane - left_lane).
+is a good representative to the position of the car. So the position is computed as the difference between the center
+of the image to the middle point of the lanes ```(right_lane - left_lane)```.
 
 The computed values are annotated over the image, as follows:
 
@@ -252,3 +254,7 @@ help to make the colors a little bit less variable.
 
 The algorithm also always looks for two lines, one on the right side and one on the left side of the frame.
 So whenever the car changes lanes there would be an interval where it can't detect the lane.
+
+A good diagnostics for finding were the algorithm is underperforming would be to create a video output with the screen
+split in four, showing the binary image, the bird's eye view of the binary image, the detected line points and the
+output frame all toghether.
