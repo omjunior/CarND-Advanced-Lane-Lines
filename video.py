@@ -16,8 +16,7 @@ def proc_frame(img):
     return proc
 
 
-# videos = glob.glob("./*.mp4")
-videos = glob.glob("./project*.mp4")
+videos = glob.glob("./*.mp4")
 for video in videos:
     finder = LaneFinder(5)
     filename = video.split('/')[-1]

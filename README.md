@@ -116,7 +116,21 @@ It's functionality can be see on the constructor:
 Then the class ```PerspectiveTranformer``` computes and stores both the direct and reverse matrices using OpenCV's 
 ```getPerspectiveTransform```, and calls OpenCV's ```warpPerspective``` when needed with the rigth matrix.
 
-To better illustrate, a red box is drawn over the original image, so the process can be understood:
+In this work, the parameters found to represent well the dataset were ```(1280, 720, 1.2, 0.96, 0.12, 0.62)```, which
+produce the following translation: 
+
+| Source        | Destination   | 
+|:-------------:|:-------------:| 
+| -128, 691     |    0, 720     | 
+| 1408, 691     | 1280, 720     |
+|  563, 446     |    0, 0       |
+|  716, 446     | 1280, 0       |
+
+Notice that the bottom corners are actually outside the image, which explains the black portions on the warped image.
+This was done to be able to have a greater lateral extension on the top of the region of interest while keeping the
+lines 'straight'.
+
+To better illustrate, a red box is drawn over the original image, so the process can be better understood:
 
 | Original marked | Warped region | 
 |:---:|:---:|
@@ -132,27 +146,42 @@ On the actual pipeline, the image transformed is the binary one. Follow an examp
 
 #### Find Lines
 
-The code for finding 2nd order polinomials can be found in the class ```LaneFinder```.
+The code for finding 2nd order polynomials can be found in the class ```LaneFinder```.
 
 There are two methods for finding pixels, one for starting from scratch, called ```find_lanes_full()```, and another
 for when the equation for the last frame is known and reliable, called ```find_lanes_with_eq()```.
 
 The first method, ```find_lanes_full()```, starts by looking at the bottom half of the binary thresholded image, 
-computing the histogram of pixels by column. The two larger peaks are chosen as the starting points for the search as
-right and left lane points.
+computing the histogram of pixels by column. The larger peak of each half of the image is computed.
 
-..............................................................................
+Then search blocks are defined. The height of each block is ```1/nwindows``` of the frame height (in this case
+```nwindows``` used was 9). The first blocks for both left and right are centered in the respective peaks found earlier.
+Each block extends laterally by ```margin``` pixels (150 used in this case).
+All non-zero pixels inside these blocks are selected. The average of the **x** positions of each block will determine
+the center of the next search block.
+
+The method ```find_lanes_with_eq()``` also finds the pixels belonging to the lines, but with a different approach.
+Instead of defining blocks, the pixels selected are those within plus or minus ```margin``` from the previous equation
+found earlier. That is, for each **y**, the corresponding **x** value is computed by applying the polynomial found in
+the previous frame. Every non-zero pixel for that **y**, in a distance less than ```margin``` from the computed **x**
+are selected.
+
+For both cases, if a minimum of ```limit``` points are not found for either line, the result is rejected, and they are
+not used to compute a new polynomial.
 
 In both methods, after the points belonging to the lanes are found, they are stored in a list with at most ```memory```
-positions, and these points are used in the polinomial regression. Unless a minimum number of points is not found. In
-this case the search is considered a failure, and the points are not used. 
-
+positions, and these points are used in the polynomial regression.
 This implements a sort of low pass filtering, since the regression algorithm will see points from the last ```memory```
 frames. This was done so the generated video would be less wobbly. I found that low values work best (3 to 5 frames).
 
+If the last frame failed, the current frame will be processed with ```find_lanes_full()```. If the last frame was
+successful, the current frame is processed with ```find_lanes_with_eq()```, and if this method fails the same frame
+falls to ```find_lanes_full()```.
+
+The polynomials are computed by using the OpenCV function ```polyfit```.
 
 In the following examples, the detected points belonging to lines are colored blue and red, and the space between the
-computed polinomials (the lane) is colored green:
+computed polynomials (the lane) is colored green:
 
 | |  | 
 |:---:|:---:|
@@ -168,11 +197,38 @@ Which after being warped back and overlaid on the original (undistorted) image, 
 
 #### Curvature computation
 
+Finally, the radius of curvature of the lane and relative position of the car are calculated.
+
+At this point we have a polynomial representing each of the lines delimiting the lane.
+These equations are of the form: ```x(y) = A * y^2 + B * y + C```.
+The regression is taken as **x** being a function of **y** rather than the opposite because a function can only have one
+otuput value for each input, and there can be lots of **y** values for the same **x** since lines can be very close to
+vertical.
+
+The curvature of a line at a point **y** can be computed using the following formula:
+ 
+```R = ((1 + (2*y+B)^2)^(3/2))/abs(2*A)```
+
+But since all these points are being measured in pixels, a convertion must be performed to express these values in
+real world units, such as meters.
+
+For that, the equation is first computed for each **y** in the range of the image (its height).
+For the **x** dimension, the distance between lines is computed in pixels, and the following constant is multiplied
+to each **x**: ```3.7 meters / lanes_dist```, which is assumed to be the width of the lane.
+For the **y** dimension, it is assumed that the area of interest selected spans approx. 50 meters, hence multiplying
+by a factor of ```50/720```.
+
+After the transformation the above equation is applied on the bottom-most pixel (the point closest to the car).
+
+For the car's position, it is assumed that the camera is mounted on the center of the car, so the center of the image
+is a good representative to the position of the car. So it is computed as the difference between the center of the
+image to the middle point of the lanes (right_lane - left_lane).
+
+The computed values are annotated over the image, as follows:
+
 | |  | 
 |:---:|:---:|
 | ![alt text][t1_final] | ![alt_text][t2_final] |
-
----
 
 ### Pipeline (video)
 
@@ -180,7 +236,19 @@ The same pipeline is applied to all videos in the root directory in the file ```
 
 The output for the project video can be found [in this link](./output_video/project_video.mp4)
 
+In this particular video only the first frame was fully computed using ```find_lanes_full()```.
+All other frames were computed by using ```find_frames_with_eq()```.
+
 ---
 
 ### Discussion
 
+First of all the detection of lines relies on them being either white or yellow. Any lane defined by lines of a
+different color would certainly make the algorithm fail.
+
+The constants used were also fine-tuned for this video, and so might not
+generalize well. For this issue, maybe a pre-processing with a sliding window performing an adaptive equalization could
+help to make the colors a little bit less variable.
+
+The algorithm also always looks for two lines, one on the right side and one on the left side of the frame.
+So whenever the car changes lanes there would be an interval where it can't detect the lane.

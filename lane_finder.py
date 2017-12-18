@@ -17,7 +17,7 @@ class LaneFinder:
         self.left = Lane()
         self.right = Lane()
         self.memory = memory
-        self.margin = 100
+        self.margin = 150
         self.nonzerox = None
         self.nonzeroy = None
         self.success_last = False
