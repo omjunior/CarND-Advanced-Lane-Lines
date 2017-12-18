@@ -7,7 +7,7 @@
 * Use color transforms, gradients, etc., to create a thresholded binary image.
 * Apply a perspective transform to rectify binary image ("birds-eye view").
 * Detect lane pixels and fit to find the lane boundary.
-* Determine the curvature of the lane and vehicle position with respect to center.
+* Determine the curvature of the lane and vehicle position with respect to the center.
 * Warp the detected lane boundaries back onto the original image.
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
@@ -41,7 +41,7 @@
 The code for the camera calibration was implemented on the class ```Camera```.
 The method ```findChessboardCorners``` from OpenCV is executed for each image taken from the camera, which finds the
 positions of each crossing in a chessboard image photo, accumulated in ```imgpoints```.
-The points are known to be in a plane, so the reference points (```objpoints```), which are points in 3D, are considered
+The points are known to be on a plane, so the reference points (```objpoints```), which are points in 3D, are considered
 flat (z coordinate always zero).
 Both ```objpoints``` and ```imgpoints``` are passed to the ```calibrateCamera``` OpenCV function to compute the
 camera matrix and distortion coefficients, which in turn are used to undistort images taken with the same camera.
@@ -58,8 +58,8 @@ The file ```images.py``` calls the following for each image in ```./test_image``
 
 #### Remove camera distortion
 
-The first step of the pipeline is to remove camera distoritions, using the matrix and coefficients found earlier.
-The distortions in this particular case aren't great, being most noticeable in the border of the pictures.
+The first step of the pipeline is to remove camera distortions, using the matrix and coefficients found earlier.
+The distortions in this particular case aren't great, being most noticeable on the border of the pictures.
 
 Follow examples.
 
@@ -73,8 +73,8 @@ Follow examples.
 I found that the most efficient method for identifying pixels belonging to lanes was not applying convolution, but
 simple thresholds.
 
-I converted the image to the HLS space, and combined a yellow thresholding with a white one.
-The yellow threshold was implemented by seraching for a Hue channel value between 0 and 50, and both Luminance and
+I converted the image to the HLS space and combined a yellow thresholding with a white one.
+The yellow threshold was implemented by searching for a Hue channel value between 0 and 50, and both Luminance and
 Saturation between 100 and 255. As for the white threshold, any pixel with Luminance larger than 200 is accepted.
 
 This was implemented in the class ```ImagePipeline```, method ```find_lanes()```, which should receive an image already
@@ -95,12 +95,12 @@ The results are as follow:
 
 #### Perspective transform
 
-The perspective transform code is divided in two classes: ```AOIBuilder``` and ```PerspectiveTransformer```.
+The perspective transform code is divided into two classes: ```AOIBuilder``` and ```PerspectiveTransformer```.
 
-The first is a helper class used to define the mapping between point in the original and warped views.
+The first is a helper class used to define the mapping between a point in the original and warped views.
 Instead of defining fixed points, I found easier to give relative percentages of the whole screen.
 
-It's functionality can be see on the constructor:
+Its functionality can be seen on the constructor:
 
 ```python
     def __init__(self, width, height, bottom_width, bottom_y_pos, top_width, top_y_pos):
@@ -114,7 +114,7 @@ It's functionality can be see on the constructor:
 ```
 
 Then the class ```PerspectiveTranformer``` computes and stores both the direct and reverse matrices using OpenCV's 
-```getPerspectiveTransform```, and calls OpenCV's ```warpPerspective``` when needed with the rigth matrix.
+```getPerspectiveTransform```, and calls OpenCV's ```warpPerspective``` when needed with the right matrix.
 
 In this work, the parameters found to represent well the dataset were ```(1280, 720, 1.2, 0.96, 0.12, 0.62)```, which
 produce the following translation: 
@@ -126,7 +126,7 @@ produce the following translation:
 |  563, 446     |    0, 0       |
 |  716, 446     | 1280, 0       |
 
-Notice that the bottom corners are actually outside the image, which explains the black portions on the warped image.
+Notice that the bottom corners are actually outside the image, which explains the black portions of the warped image.
 This was done to be able to have a greater lateral extension on the top of the region of interest while keeping the
 lines 'straight'.
 
@@ -171,7 +171,7 @@ not used to compute a new polynomial.
 
 In both methods, after the points belonging to the lanes are found, they are stored in a list with at most ```memory```
 positions, and these points are used in the polynomial regression.
-This implements a sort of low pass filtering, since the regression algorithm will see points from the last ```memory```
+This implements a sort of low pass filtering since the regression algorithm will see points from the last ```memory```
 frames. This was done so the generated video would be less wobbly. I found that low values work best (3 to 5 frames).
 
 If the last frame failed, the current frame will be processed with ```find_lanes_full()```. If the last frame was
@@ -199,18 +199,18 @@ Which after being warped back and overlaid on the original (undistorted) image, 
 
 Finally, the radius of curvature of the lane and relative position of the car are calculated.
 
-At this point we have a polynomial representing each of the lines delimiting the lane.
+At this point, we have a polynomial representing each of the lines delimiting the lane.
 These equations are of the form: ```x(y) = A * y^2 + B * y + C```.
 The regression is taken as **x** being a function of **y** rather than the opposite because a function can only have one
-otuput value for each input, and there can be lots of **y** values for the same **x** since lines can be very close to
+output value for each input, and there can be lots of **y** values for the same **x** since lines can be very close to
 vertical.
 
 The curvature of a line at a point **y** can be computed using the following formula:
  
 ```R = ((1 + (2*y+B)^2)^(3/2))/abs(2*A)```
 
-But since all these points are being measured in pixels, a convertion must be performed to express these values in
-real world units, such as meters.
+But since all these points are being measured in pixels, a conversion must be performed to express these values in
+real-world units, such as meters.
 
 For that, the equation is first computed for each **y** in the range of the image (its height).
 For the **x** dimension, the distance between lines is computed in pixels, and the following constant is multiplied
@@ -218,7 +218,7 @@ to each **x**: ```3.7 meters / lanes_dist```, which is assumed to be the width o
 For the **y** dimension, it is assumed that the area of interest selected spans approx. 50 meters, hence multiplying
 by a factor of ```50/720```.
 
-After the transformation the above equation is applied on the bottom-most pixel (the point closest to the car).
+After the transformation, the above equation is applied to the bottom-most pixel (the point closest to the car).
 
 For the car's position, it is assumed that the camera is mounted on the center of the car, so the center of the image
 is a good representative to the position of the car. So it is computed as the difference between the center of the
@@ -234,9 +234,9 @@ The computed values are annotated over the image, as follows:
 
 The same pipeline is applied to all videos in the root directory in the file ```video.py```.
 
-The output for the project video can be found [in this link](./output_video/project_video.mp4)
+The output for the project video can be found [at this link](./output_video/project_video.mp4)
 
-In this particular video only the first frame was fully computed using ```find_lanes_full()```.
+In this particular video, only the first frame was fully computed using ```find_lanes_full()```.
 All other frames were computed by using ```find_frames_with_eq()```.
 
 ---
