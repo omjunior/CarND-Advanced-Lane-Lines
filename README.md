@@ -182,7 +182,7 @@ The polynomials are computed by using the OpenCV function ```polyfit``` over the
 
 In the following examples, the detected points belonging to the left and right lines are colored blue and red
 respectively, and the space between the computed polynomials (the lane) is colored green.
-Both borders of the green regions are a plot of the fitted polynomial.
+Both borders of the green region are a plot of the fitted polynomial.
 
 | |  | 
 |:---:|:---:|
