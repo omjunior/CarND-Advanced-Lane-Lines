@@ -71,18 +71,17 @@ class LaneFinder:
         return color_warp
 
     def annotate_frame(self, image):
-        y_eval = 719
+        y_eval = image.shape[0] - 1
 
         left_fitx = self.left.fit[0] * Lane.plot_y ** 2 + self.left.fit[1] * Lane.plot_y + self.left.fit[2]
         right_fitx = self.right.fit[0] * Lane.plot_y ** 2 + self.right.fit[1] * Lane.plot_y + self.right.fit[2]
         lanes_dist = right_fitx[y_eval] - left_fitx[y_eval]
 
-        ym_per_pix = 50 / 720  # meters per pixel in y dimension
+        ym_per_pix = 50 / image.shape[0]  # meters per pixel in y dimension
         xm_per_pix = 3.7 / lanes_dist  # meters per pixel in x dimension
 
         middlex = (left_fitx[y_eval] + right_fitx[y_eval]) / 2 * xm_per_pix
-        carx = 1080 / 2 * xm_per_pix
-
+        carx = image.shape[1] / 2 * xm_per_pix
 
         # Fit new polynomials to x,y in world space
         left_fit_cr = np.polyfit(Lane.plot_y * ym_per_pix, left_fitx * xm_per_pix, 2)
@@ -182,19 +181,16 @@ class LaneFinder:
         self.left.lane_inds = np.concatenate(self.left.lane_inds)
         self.right.lane_inds = np.concatenate(self.right.lane_inds)
 
+        # abort this frame and keep last fit
+        if self.nonzerox[self.left.lane_inds].size < self.limit or \
+                self.nonzerox[self.right.lane_inds].size < self.limit:
+            return False
+
         # Extract left and right line pixel positions
         self.left.x.append(self.nonzerox[self.left.lane_inds])
         self.left.y.append(self.nonzeroy[self.left.lane_inds])
         self.right.x.append(self.nonzerox[self.right.lane_inds])
         self.right.y.append(self.nonzeroy[self.right.lane_inds])
-
-        # abort this frame and keep last fit
-        if self.right.x[-1].size < self.limit or self.left.x[-1].size < self.limit:
-            self.left.x.pop(-1)
-            self.left.y.pop(-1)
-            self.right.x.pop(-1)
-            self.right.y.pop(-1)
-            return False
 
         # hold the last 'memory' items
         if len(self.left.x) > self.memory:
@@ -229,19 +225,16 @@ class LaneFinder:
              (self.nonzerox < (self.right.fit[0] * (self.nonzeroy ** 2) +
                                self.right.fit[1] * self.nonzeroy + self.right.fit[2] + self.margin)))
 
+        # abort this frame and keep last fit
+        if self.nonzerox[self.left.lane_inds].size < self.limit or \
+                self.nonzerox[self.right.lane_inds].size < self.limit:
+            return False
+
         # Again, extract left and right line pixel positions
         self.left.x.append(self.nonzerox[self.left.lane_inds])
         self.left.y.append(self.nonzeroy[self.left.lane_inds])
         self.right.x.append(self.nonzerox[self.right.lane_inds])
         self.right.y.append(self.nonzeroy[self.right.lane_inds])
-
-        # abort this frame and keep last fit
-        if self.right.x[-1].size < self.limit or self.left.x[-1].size < self.limit:
-            self.left.x.pop(-1)
-            self.left.y.pop(-1)
-            self.right.x.pop(-1)
-            self.right.y.pop(-1)
-            return False
 
         # hold the last 'memory' items
         if len(self.left.x) > self.memory:

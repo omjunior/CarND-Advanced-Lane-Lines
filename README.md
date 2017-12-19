@@ -75,7 +75,8 @@ but to apply simple threshold values.
 
 I converted the image to the HLS space and combined a yellow thresholding with a white one.
 The yellow threshold was implemented by searching for a Hue channel value between 0 and 50, and both Luminance and
-Saturation between 100 and 255. As for the white threshold, any pixel with Luminance larger than 200 is accepted.
+Saturation between 100 and 255. The Hue channel is relatively independent from light conditions, so it results in a 
+somewhat robust detection. As for the white threshold, any pixel with Luminance larger than 200 is accepted.
 
 This was implemented in the class ```ImagePipeline```, method ```find_lanes()```, which should receive an image already
 in HLS colorspace, and is as simple as:
